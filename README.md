@@ -82,6 +82,32 @@ cmake --build .
 
 This produces the `alpha_engine` library target that can be linked into a larger trading system or a dedicated execution service.
 
+### From Python Positions to C++ Orders
+
+To pass research results into the C++ simulator:
+
+1. Export a positions CSV from Python with columns:
+   - `timestamp` (ISO string or datetime)
+   - `price` (mid/close price at that timestamp)
+   - `target_position` (desired position size, e.g. number of shares)
+2. Convert positions to orders:
+
+```bash
+python -m execution.make_orders_from_positions \
+  --positions-csv signals/signal_files/positions_example.csv \
+  --out-csv signals/signal_files/orders_from_python.csv
+```
+
+3. Run the C++ simulator on those orders:
+
+```bash
+cd build
+./alpha_engine_sim ../signals/signal_files/orders_from_python.csv
+```
+
+This gives you an execution-style view of how your Python strategy would have traded through a limit order book.
+
+
 ## Streamlit Dashboard
 
 Run the dashboard from the project root:

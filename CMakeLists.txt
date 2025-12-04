@@ -13,4 +13,6 @@ add_library(alpha_engine
 
 target_include_directories(alpha_engine PUBLIC execution_engine)
 
+add_executable(alpha_engine_sim execution_engine/main.cpp)
+target_link_libraries(alpha_engine_sim PRIVATE alpha_engine)
 
