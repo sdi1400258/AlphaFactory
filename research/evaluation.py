@@ -69,7 +69,9 @@ def aggregate_walk_forward(results: List[Dict]) -> Dict[str, object]:
 
     # Simple linear strategy: proportional to prediction
     # position_t = sign(pred_t), pnl ~ position * actual
-    positions = np.sign(y_pred_all)
+    # magnitude-sensitive positions
+    positions = y_pred_all  # or np.tanh(y_pred_all), or y_pred_all / np.std(y_pred_all)
+
     returns = positions * y_true_all
 
     stats = summarize_performance(returns)

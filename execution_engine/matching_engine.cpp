@@ -23,7 +23,10 @@ PriceLevel *find_level(std::vector<PriceLevel> &levels, double price, bool is_bi
 
 } // namespace
 
-void OrderBook::add_limit(const Order &o, std::vector<Trade> &trades) {
+void OrderBook::add_limit(const Order &o_in, std::vector<Trade> &trades) {
+    // Work on a mutable copy so we can reduce remaining quantity
+    Order o = o_in;
+
     if (o.side == Side::BUY) {
         // match against best asks
         for (auto it = asks.begin(); it != asks.end() && o.price >= it->price;) {
@@ -49,9 +52,8 @@ void OrderBook::add_limit(const Order &o, std::vector<Trade> &trades) {
                 return;
         }
         if (o.qty > 0) {
-            Order resting = o;
-            auto *lvl = find_level(bids, resting.price, true);
-            lvl->queue.push_back(resting);
+            auto *lvl = find_level(bids, o.price, true);
+            lvl->queue.push_back(o);
         }
     } else {
         // SELL: match against best bids
@@ -78,9 +80,8 @@ void OrderBook::add_limit(const Order &o, std::vector<Trade> &trades) {
                 return;
         }
         if (o.qty > 0) {
-            Order resting = o;
-            auto *lvl = find_level(asks, resting.price, false);
-            lvl->queue.push_back(resting);
+            auto *lvl = find_level(asks, o.price, false);
+            lvl->queue.push_back(o);
         }
     }
 }
@@ -166,5 +167,6 @@ double OrderBook::mid() const {
 }
 
 } // namespace alpha
+
 
 
