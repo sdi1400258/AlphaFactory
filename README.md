@@ -9,7 +9,6 @@ AlphaFactory is a miniature systematic trading stack that combines:
 - **C++ execution engine**: simple limit order book, matching engine, risk checks, and CSV-driven simulation.
 - **Dashboard**: Streamlit app to visualize signals and PnL.
 
-This is designed as a portfolio-quality project that looks like what a small quant research pod would build.
 
 ## Project Structure
 
@@ -158,5 +157,6 @@ Each CSV is normalized to `timestamp,open,high,low,close,volume` so it plugs dir
 5. **Execution simulation (C++)**
    - Generate a synthetic order stream (from signals, not included here) into a CSV.
    - Use the logic in `execution_engine/simulator.cpp` (`run_simulation_csv`) to simulate fills and slippage.
+
 
 
