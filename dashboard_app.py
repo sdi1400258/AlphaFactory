@@ -18,7 +18,9 @@ from backtester.portfolio import equity_from_returns
 
 
 def load_signals(path: str) -> pd.DataFrame:
-    return pd.read_csv(path, parse_dates=["timestamp"])
+    df = pd.read_csv(path)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+    return df
 
 
 def main() -> None:
