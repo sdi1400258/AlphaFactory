@@ -1,162 +1,134 @@
-# AlphaFactory
-Multi-Asset ML Alpha Factory with C++ Execution Engine
+# AlphaFactory v2.0
+**Multi-Asset ML Alpha Factory with C++ Execution Engine**
+
+![AlphaFactory Pipeline](assets/pipeline_flowchart.png)
 
 ## Overview
 
-AlphaFactory is a miniature systematic trading stack that combines:
+AlphaFactory is a systematic trading stack that bridges the gap between research and execution. It combines high-level Python ML research with a low-level C++ simulation engine.
 
-- **Python research**: feature engineering, ML alpha models (LSTM, TCN, Transformer), walk-forward training, robustness tests, and backtesting.
-- **C++ execution engine**: simple limit order book, matching engine, risk checks, and CSV-driven simulation.
-- **Dashboard**: Streamlit app to visualize signals and PnL.
+**Key Capabilities:**
+- **Multi-Asset**: Seamlessly handles Equities, Crypto, and FX.
+- **Advanced ML**: Ensemble learning combining Transformers (Deep Learning) and XGBoost (Gradient Boosting).
+- **Realistic Simulation**: C++ execution engine with Limit Order Book (LOB) matching and risk checks.
 
+## New Features (v2.0)
+- **Multi-Asset Support**: Normalized data handling for `Equities`, `Crypto`, and `FX`.
+- **Advanced Features**: RSI, MACD, Bollinger Bands, ATR, Skew, Kurtosis.
+- **Ensemble Model**: Weighted averaging of Transformer and XGBoost predictions.
+- **Orchestration**: Single script `run_strategy.py` for end-to-end execution.
+
+---
 
 ## Project Structure
 
-- `data/`
-  - `equities/`, `crypto/`, `fx/`: place your raw OHLCV data here (CSV with `timestamp,open,high,low,close,volume`).
-- `research/`
-  - `common.py`: shared configs and helpers (e.g. `BarConfig`, CSV loader, forward returns).
-  - `feature_engineering.py`: microstructure/technical/volume features and tensorization into `[samples, lookback, features]`.
-  - `model_lstm.py`: LSTM sequence model for returns prediction.
-  - `model_tcn.py`: Temporal Convolutional Network model.
-  - `model_transformer.py`: Transformer encoder model with positional encoding.
-  - `walk_forward.py`: rolling walk-forward training and adversarial noise robustness test.
-  - `evaluation.py`: Sharpe, Sortino, drawdowns, and aggregation of walk-forward results.
-- `signals/`
-  - `signal_exporter.py`: exports timestamped signals to `signals/signal_files/*.csv` for the execution engine.
-- `execution_engine/`
-  - `orderbook.hpp`: basic limit order book with bid/ask queues.
-  - `matching_engine.cpp`: limit/market order matching, partial fills, and book updates.
-  - `simulator.cpp`: CSV-driven simulator that replays orders and produces trades.
-  - `risk_checks.cpp`: simple notional and max-position risk checks.
-- `backtester/`
-  - `slippage_models.py`: basic spread + impact slippage model in bps.
-  - `portfolio.py`: PnL aggregation, equity curve, and stats wrapper.
-  - `backtest.py`: plugs walk-forward outputs into slippage + portfolio.
-- `notebooks/`
-  - `01_feature_engineering.ipynb`: exploratory feature analysis (skeleton).
-  - `02_model_training.ipynb`: model comparison and walk-forward (skeleton).
-  - `03_pnl_analysis.ipynb`: PnL and risk analytics (skeleton).
-- `dashboard_app.py`: Streamlit dashboard for signals and PnL.
-- `CMakeLists.txt`: build configuration for the C++ execution engine.
+```
+AlphaFactory/
+├── data/                   # OHLCV data storage
+│   ├── equities/
+│   ├── crypto/
+│   └── fx/
+├── research/               # Python Research Pipeline
+│   ├── feature_engineering.py  # Technical & Statistical features
+│   ├── model_transformer.py    # PyTorch Transformer
+│   ├── model_xgb.py            # XGBoost wrapper
+│   ├── ensemble.py             # Model averaging logic
+│   └── common.py               # Data loaders
+├── signals/                # Generated signals
+├── execution_engine/       # C++ LOB & Simulator
+├── backtester/             # Python-based PnL analysis
+├── notebooks/              # Jupyter notebooks for analysis
+├── run_strategy.py         # Main orchestration script
+└── dashboard_app.py        # Streamlit UI
+```
 
 ## Python Research Pipeline
 
-1. **Feature engineering**
-   - Load OHLCV data with `research.common.load_ohlcv_csv`.
-   - Build features (returns, volatility, volume z-scores, microstructure proxies) using `research.feature_engineering.build_features`.
-2. **Model training**
-   - Choose model family:
-     - LSTM (`LSTMAlpha` in `model_lstm.py`)
-     - TCN (`TCNAlpha` in `model_tcn.py`)
-     - Transformer (`TransformerAlpha` in `model_transformer.py`)
-   - Each model has a `train_*` helper that trains on `(X_train, y_train)` / `(X_val, y_val)`.
-3. **Walk-forward and robustness**
-   - Use `research.walk_forward.walk_forward` with a training function that constructs and trains your chosen model.
-   - Use `research.walk_forward.adversarial_noisy_eval` to probe sensitivity to small input perturbations (adversarial robustness style).
-4. **Evaluation**
-   - Aggregate walk-forward segments with `research.evaluation.aggregate_walk_forward`.
-   - Inspect Sharpe, Sortino, drawdowns, and PnL distribution.
-5. **Backtesting**
-   - Convert predictions to positions and run through `backtester.backtest.backtest_from_walk_forward`.
-   - Apply realistic slippage with `backtester.slippage_models.simple_bps_slippage`.
+The research pipeline has been upgraded to support ensemble learning and richer feature sets.
+
+1.  **Data Loading**: 
+    -   `data.download_data` fetches daily OHLCV from Yahoo Finance.
+    -   Supports auto-normalization of diverse assets.
+
+2.  **Feature Engineering**:
+    -   **Microstructure**: High/Low spread, Close position in bar.
+    -   **Technical**: RSI (14), MACD, Bollinger Bands, ATR.
+    -   **Statistical**: Rolling Skewness and Kurtosis (20-day) to capture tail risk.
+    -   **Tensorization**: Converts data into `[Samples, Lookback, Features]` 3D tensors.
+
+3.  **Model Training (Ensemble)**:
+    -   **Transformer**: Attention-based model to capture sequential dependencies.
+    -   **XGBoost**: Gradient boosting tree model on flattened features.
+    -   **Ensemble**: `EnsembleAlpha` weights predictions (default 50/50) for robust signal generation.
+
+4.  **Signal Export**:
+    -   Predictions are finalized and exported to CSV for the Execution Engine.
+
+### Quick Start
+Run the full pipeline with one command:
+```bash
+python run_strategy.py
+```
+
+---
 
 ## C++ Execution Engine
 
-The execution engine is deliberately small but shows the right ideas:
+The execution engine is designed to verify that signals can be traded in a realistic environment.
 
-- **Order book**: price levels with FIFO queues, best bid/ask, mid-price.
-- **Matching**: limit and market orders, partial fills, queue-based priority.
-- **Risk checks**: simple notional and max-position guards.
-- **Simulator**: replays a CSV of orders and outputs trades.
+**Components:**
+- **Order Book**: Limit Order Book with FIFO queues.
+- **Matching Engine**: Supports Limit and Market orders, partial fills.
+- **Risk Checks**: Max position size, Max notional exposure.
+- **Simulator**: Replays historical orders against the matching engine.
 
-Build it with CMake:
-
+### Build & Run
 ```bash
 mkdir build
 cd build
 cmake ..
 cmake --build .
+
+# Run simulator with generated orders
+./alpha_engine_sim ../signals/signal_files/orders.csv
 ```
 
-This produces the `alpha_engine` library target that can be linked into a larger trading system or a dedicated execution service.
-
-### From Python Positions to C++ Orders
-
-To pass research results into the C++ simulator:
-
-1. Export a positions CSV from Python with columns:
-   - `timestamp` (ISO string or datetime)
-   - `price` (mid/close price at that timestamp)
-   - `target_position` (desired position size, e.g. number of shares)
-2. Convert positions to orders:
-
-```bash
-python -m execution.make_orders_from_positions \
-  --positions-csv signals/signal_files/positions_example.csv \
-  --out-csv signals/signal_files/orders_from_python.csv
-```
-
-3. Run the C++ simulator on those orders:
-
-```bash
-cd build
-./alpha_engine_sim ../signals/signal_files/orders_from_python.csv
-```
-
-This gives you an execution-style view of how your Python strategy would have traded through a limit order book.
-
+---
 
 ## Streamlit Dashboard
 
-Run the dashboard from the project root:
+Visualize your alpha signals and backtest performance.
 
 ```bash
 streamlit run dashboard_app.py
 ```
+It displays:
+-   Signal Heatmaps across assets.
+-   Cumulative PnL equity curves.
+-   Feature correlations.
 
-It will:
-
-- Load signal CSVs from `signals/signal_files/alpha_ml_signals.csv`.
-- Load PnL / equity curve CSV (e.g. `backtest_pnl.csv`).
-- Plot signal heatmaps over time and equity curves to visually inspect behaviour.
+---
 
 ## Data Download Helper
 
-You can quickly pull daily OHLCV data into the `data/` folders using:
+Populate your data directories easily:
 
 ```bash
-python -m data.download_data --asset-class equities --symbol AAPL --start 2015-01-01
-python -m data.download_data --asset-class crypto --symbol BTC-USD --start 2018-01-01
-python -m data.download_data --asset-class fx --symbol EURUSD --start 2015-01-01
+# Equities
+python -m data.download_data --asset-class equities --symbol AAPL --start 2020-01-01
+
+# Crypto
+python -m data.download_data --asset-class crypto --symbol BTC-USD --start 2022-01-01
+
+# FX
+python -m data.download_data --asset-class fx --symbol EURUSD --start 2020-01-01
 ```
 
-This writes CSVs like:
-
-- `data/equities/AAPL.csv`
-- `data/crypto/BTC-USD.csv`
-- `data/fx/EURUSD.csv`
-
-Each CSV is normalized to `timestamp,open,high,low,close,volume` so it plugs directly into the research pipeline.
+---
 
 ## Example End-to-End Flow
 
-1. **Prepare data**
-   - Drop an OHLCV CSV into `data/equities/` (for example).
-2. **Feature + model training**
-   - Use `research` modules or `02_model_training.ipynb` to:
-     - build features
-     - train LSTM/TCN/Transformer with walk-forward
-     - export combined predictions.
-3. **Export signals**
-   - Convert model outputs into scores per asset and timestamp.
-   - Call `signals.signal_exporter.export_signals` to write `alpha_ml_signals.csv`.
-4. **Backtest and PnL**
-   - Run `backtester.backtest.backtest_from_walk_forward` to obtain PnL.
-   - Optionally save equity curve as `signals/signal_files/backtest_pnl.csv` for the dashboard.
-5. **Execution simulation (C++)**
-   - Generate a synthetic order stream (from signals, not included here) into a CSV.
-   - Use the logic in `execution_engine/simulator.cpp` (`run_simulation_csv`) to simulate fills and slippage.
-
-
-
+1.  **Download**: Fetch `AAPL` and `BTC-USD`.
+2.  **Run Strategy**: `python run_strategy.py` matches timestamps, generates features, trains the ensemble, and saves `ensemble_signals.csv`.
+3.  **Simulation**: (Optional) Convert signals for C++ engine and valid execution logic.
+4.  **Analysis**: Open the Dashboard to view the resulting Alpha.

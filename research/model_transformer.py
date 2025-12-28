@@ -106,3 +106,21 @@ def train_transformer(
     return model
 
 
+class TransformerWrapper:
+    """
+    Wrapper to make TransformerAlpha compatible with EnsembleAlpha (numpy input/output).
+    """
+    def __init__(self, model: TransformerAlpha, device: str = "cpu"):
+        self.model = model
+        self.device = device
+        self.model.to(device)
+        self.model.eval()
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        # X: [N, T, F] -> numpy
+        with torch.no_grad():
+            X_t = torch.from_numpy(X).float().to(self.device)
+            preds = self.model(X_t)
+            return preds.cpu().numpy()
+
+

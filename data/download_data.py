@@ -19,6 +19,11 @@ import yfinance as yf
 
 def download_equity(symbol: str, start: str, end: str | None) -> pd.DataFrame:
     df = yf.download(symbol, start=start, end=end or None, progress=False)
+    
+    # Handle yfinance MultiIndex columns (Price, Ticker)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    
     df = df.rename(
         columns={
             "Open": "open",

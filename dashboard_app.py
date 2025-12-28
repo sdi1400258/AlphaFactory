@@ -28,7 +28,7 @@ def main() -> None:
 
     st.sidebar.header("Inputs")
     signal_path = st.sidebar.text_input(
-        "Signal CSV", value="signals/signal_files/alpha_ml_signals.csv"
+        "Signal CSV", value="signals/signal_files/ensemble_signals.csv"
     )
     pnl_path = st.sidebar.text_input(
         "PnL CSV (optional)", value="signals/signal_files/backtest_pnl.csv"
@@ -39,7 +39,7 @@ def main() -> None:
         st.subheader("Signals overview")
         st.write(sig.head())
         st.line_chart(
-            sig.pivot(index="timestamp", columns="asset", values="score").fillna(0.0)
+            sig.pivot(index="timestamp", columns="asset", values="signal").fillna(0.0)
         )
     else:
         st.info("Signal file not found yet. Run research/backtest pipeline first.")
