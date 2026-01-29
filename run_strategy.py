@@ -4,23 +4,21 @@ run_strategy.py
 End-to-End Orchestration Script for AlphaFactory.
 1. Loads OHLCV data for multiple assets.
 2. Generates features (Technical + Statistical).
-3. Trains an Ensemble Model (Transformer + XGBoost) on a training split.
+3. Trains an XGBoost model on a training split.
 4. Generates predictions (Signals) for the test split.
 5. Exports signals for the Execution Engine.
 """
 
 import argparse
+import gc
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
-import torch
 
 from research import common, feature_engineering
-from research.model_transformer import TransformerAlpha, TransformerConfig, train_transformer, TransformerWrapper
 from research.model_xgb import XGBAlpha, XGBConfig, train_xgb
-from research.ensemble import EnsembleAlpha
 
 # --- Configuration ---
 LOOKBACK = 64
@@ -42,20 +40,19 @@ def load_all_assets(data_dir: Path) -> Dict[str, pd.DataFrame]:
 
 def train_and_predict(
     assets: Dict[str, pd.DataFrame]
-) -> Tuple[EnsembleAlpha, Dict[str, pd.DataFrame]]:
+) -> Tuple[XGBAlpha, Dict[str, pd.DataFrame]]:
     
-    # 1. Prepare Global Dataset (Pooled or specific? Let's do pooled for simplicity of the example)
-    # Note: In production you might train separate models per asset class.
-    # Here we demonstrate a global model trained on all assets.
+    # 1. Prepare Global Dataset
+    # Train a single XGBoost model on all assets
     
     print(f"Loaded {len(assets)} assets.")
     
-    # We collect all samples to scale/train
+    # We collect all samples to train
     all_X = []
     all_y = []
     
     # We will need to store test data to run predictions later
-    test_datasets = {} # asset -> (df, X_test, valid_indices)
+    test_datasets = {} # asset -> (X_test, dates, close_prices)
     
     bar_cfg = common.BarConfig(
         lookback_window=LOOKBACK,
@@ -73,6 +70,7 @@ def train_and_predict(
     
     print("Building features...")
     for name, df in assets.items():
+        print(f"  Processing {name}...")
         # Build features
         X, y, cols, times = feature_engineering.build_features(df, feat_cfg)
         if len(X) == 0:
@@ -81,9 +79,6 @@ def train_and_predict(
         feature_cols = cols
         
         # Split by date using returned timestamps
-        # times corresponds to the execution time (end of feature window)
-        
-        # Boolean masks
         train_mask = times < np.datetime64(TRAIN_SPLIT_DATE)
         test_mask = times >= np.datetime64(TRAIN_SPLIT_DATE)
         
@@ -94,27 +89,30 @@ def train_and_predict(
             
         # Store Test Data
         if test_mask.any():
-            # Align df rows to test samples for saving signals
-            # X[k] corresponds to times[k]
-            # We want to keep track of these times for the signal CSV
             test_datasets[name] = {
                 "X": X[test_mask],
                 "dates": times[test_mask],
-                # We also want the close price for visualization, need to find it by timestamp
-                # Optimization: The returned times match specific rows in the df (after dropna)
-                # But mapping back to original df can be slow if we do lookup.
-                # However, for the dashboard we just need 'close' at that time.
-                # Let's extract 'close' from the result or just perform a merge later.
-                # Simplest: Use the fact that X includes 'ret_1' etc? No, X is features.
-                # Let's just lookup in df.
-                "df_close": df.set_index("timestamp").loc[times[test_mask]]["close"]
+                "df_close": pd.merge(
+                    pd.DataFrame({"timestamp": times[test_mask]}),
+                    df[["timestamp", "close"]],
+                    on="timestamp",
+                    how="left"
+                )["close"]
             }
+        
+        # Free memory immediately after processing each asset
+        del df, X, y, times
+        gc.collect()
 
     if not all_X:
         raise ValueError("No training data found! Check data dir or split date.")
         
     X_train = np.concatenate(all_X, axis=0)
     y_train = np.concatenate(all_y, axis=0)
+    
+    # Free intermediate lists
+    del all_X, all_y
+    gc.collect()
     
     print(f"Training Data: {X_train.shape} samples. Features: {len(feature_cols)}")
     
@@ -127,24 +125,17 @@ def train_and_predict(
     X_t, y_t = X_train[train_idx], y_train[train_idx]
     X_v, y_v = X_train[val_idx], y_train[val_idx]
     
-    # --- Train Transformer ---
-    print("Training Transformer...")
-    t_cfg = TransformerConfig(input_size=len(feature_cols), d_model=32, nhead=4, num_layers=2)
-    model_t = TransformerAlpha(t_cfg)
-    train_transformer(model_t, (X_t, y_t), (X_v, y_v), epochs=3, device="cuda" if torch.cuda.is_available() else "cpu")
-    model_t_wrapper = TransformerWrapper(model_t, device="cuda" if torch.cuda.is_available() else "cpu")
+    # Free full training set after split
+    del X_train, y_train
+    gc.collect()
     
     # --- Train XGBoost ---
     print("Training XGBoost...")
-    x_cfg = XGBConfig(n_estimators=50, max_depth=5)
+    x_cfg = XGBConfig(n_estimators=100, max_depth=6, learning_rate=0.1)
     model_x = XGBAlpha(x_cfg)
     train_xgb(model_x, (X_t, y_t), (X_v, y_v))
     
-    # --- Ensemble ---
-    print("Creating Ensemble...")
-    ensemble = EnsembleAlpha([model_t_wrapper, model_x], weights=[0.5, 0.5])
-    
-    return ensemble, test_datasets
+    return model_x, test_datasets
 
 def main():
     root = Path(__file__).parent
@@ -157,14 +148,18 @@ def main():
         return
 
     # 2. Train
-    ensemble, test_data = train_and_predict(assets)
+    model_xgb, test_data = train_and_predict(assets)
+    
+    # Free assets dict after training
+    del assets
+    gc.collect()
     
     # 3. Predict & Export
     print("Generating Signals...")
     all_signals = []
     
     for name, data in test_data.items():
-        preds = ensemble.predict(data["X"])
+        preds = model_xgb.predict(data["X"])
         
         # Create Signal DF
         sig_df = pd.DataFrame({

@@ -111,6 +111,30 @@ def add_microstructure_proxies(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_advanced_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Use extended columns (trades, taker_buy, quote_volume) for deeper insights.
+    """
+    df = df.copy()
+    # Avoid division by zero
+    safe_vol = df["volume"] + 1e-8
+    safe_trades = df["trades"] + 1e-8
+    
+    # 1. Average Trade Size
+    df["avg_trade_size"] = df["volume"] / safe_trades
+    
+    # 2. Taker Buy Ratio (Aggressor Ratio)
+    df["taker_buy_ratio"] = df["taker_buy_base"] / safe_vol
+    
+    # 3. Flow Imbalance (in quote currency)
+    # Net buying pressure = Taker Buy Quote Vol - Taker Sell Quote Vol
+    # Taker Sell Quote Vol = Total Quote Vol - Taker Buy Quote Vol
+    taker_sell_quote = df["quote_volume"] - df["taker_buy_quote"]
+    df["flow_imbalance"] = (df["taker_buy_quote"] - taker_sell_quote) / (df["quote_volume"] + 1e-8)
+    
+    return df
+
+
 def build_features(
     df: pd.DataFrame, feature_cfg: FeatureConfig
 ) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray]:
@@ -128,6 +152,7 @@ def build_features(
         df = add_volume_features(df)
     if feature_cfg.include_microstructure:
         df = add_microstructure_proxies(df)
+        df = add_advanced_microstructure_features(df)
     if feature_cfg.include_momentum or feature_cfg.include_volatility:
         df = add_technical_indicators(df)
     if feature_cfg.include_stats:
@@ -152,31 +177,39 @@ def build_features(
             "close",
             "volume",
             "fwd_ret",
+            "quote_volume",
+            "trades", 
+            "taker_buy_base",
+            "taker_buy_quote"
         }
     ]
 
     lookback = feature_cfg.bar.lookback_window
-    X_list: List[np.ndarray] = []
-    y_list: List[float] = []
-    t_list: List[np.datetime64] = []
-
+    
     values = df[feature_cols].values.astype("float32")
     targets = df["fwd_ret"].values.astype("float32")
     times = df["timestamp"].values
 
-    for i in range(lookback, len(df)):
-        X_list.append(values[i - lookback : i])
-        y_list.append(targets[i])
-        t_list.append(times[i-1]) # Timestamp of the last bar in the window
-
-    if not X_list:
+    # Memory-efficient sliding window using stride tricks
+    if len(df) < lookback:
         X = np.empty((0, lookback, len(feature_cols)), dtype="float32")
         y = np.empty((0,), dtype="float32")
         out_times = np.empty((0,), dtype="datetime64[ns]")
     else:
-        X = np.stack(X_list, axis=0)
-        y = np.array(y_list, dtype="float32")
-        out_times = np.array(t_list)
+        # Create sliding windows efficiently (creates a view, not a copy)
+        X = np.lib.stride_tricks.sliding_window_view(
+            values, window_shape=lookback, axis=0
+        )
+        # Transpose to get shape [n_samples, lookback, n_features]
+        X = np.transpose(X, (0, 2, 1))
+        
+        # Align targets and times with the windows
+        # sliding_window_view creates (len(values) - lookback + 1) windows
+        # We need y[lookback:] which has (len(df) - lookback) elements
+        # So we need to trim X by 1 element
+        X = X[:-1]  # Remove last window since we don't have a forward return for it
+        y = targets[lookback:]
+        out_times = times[lookback-1:-1]  # Timestamp of the last bar in each window
 
     return X, y, feature_cols, out_times
 

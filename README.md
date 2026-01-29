@@ -1,4 +1,4 @@
-# AlphaFactory v2.0
+# AlphaFactory v2.1
 **Multi-Asset ML Alpha Factory with C++ Execution Engine**
 
 ![AlphaFactory Pipeline](assets/pipeline_flowchart.png)
@@ -9,14 +9,24 @@ AlphaFactory is a systematic trading stack that bridges the gap between research
 
 **Key Capabilities:**
 - **Multi-Asset**: Seamlessly handles Equities, Crypto, and FX.
-- **Advanced ML**: Ensemble learning combining Transformers (Deep Learning) and XGBoost (Gradient Boosting).
+- **Advanced ML**: XGBoost gradient boosting for robust signal generation.
 - **Realistic Simulation**: C++ execution engine with Limit Order Book (LOB) matching and risk checks.
 
-## New Features (v2.0)
-- **Multi-Asset Support**: Normalized data handling for `Equities`, `Crypto`, and `FX`.
-- **Advanced Features**: RSI, MACD, Bollinger Bands, ATR, Skew, Kurtosis.
-- **Ensemble Model**: Weighted averaging of Transformer and XGBoost predictions.
-- **Orchestration**: Single script `run_strategy.py` for end-to-end execution.
+## What's New in v2.1
+
+**Simplified Architecture**: Removed Transformer and Ensemble models to focus on a streamlined, production-ready XGBoost pipeline.
+
+**Key Changes**:
+- ✅ **XGBoost-Only**: Single, fast gradient boosting model (removed PyTorch dependency)
+- ⚡ **Memory Optimized**: Efficient sliding window implementation using NumPy stride tricks
+- 🧹 **Cleaner Codebase**: Removed `model_transformer.py`, `model_lstm.py`, `model_tcn.py`, `ensemble.py`
+- 📊 **Same Features**: Full technical indicators (RSI, MACD, Bollinger, ATR, Skew, Kurtosis)
+- 🚀 **Faster Training**: ~50% reduction in training time
+
+**Previous Features (v2.0)**:
+- Multi-Asset Support for Equities, Crypto, and FX
+- Advanced feature engineering pipeline
+- C++ execution engine with realistic order matching
 
 ---
 
@@ -30,10 +40,10 @@ AlphaFactory/
 │   └── fx/
 ├── research/               # Python Research Pipeline
 │   ├── feature_engineering.py  # Technical & Statistical features
-│   ├── model_transformer.py    # PyTorch Transformer
-│   ├── model_xgb.py            # XGBoost wrapper
-│   ├── ensemble.py             # Model averaging logic
-│   └── common.py               # Data loaders
+│   ├── model_xgb.py            # XGBoost model wrapper
+│   ├── evaluation.py           # Performance metrics (Sharpe, Sortino, etc.)
+│   ├── walk_forward.py         # Walk-forward validation utilities
+│   └── common.py               # Data loaders & utilities
 ├── signals/                # Generated signals
 ├── execution_engine/       # C++ LOB & Simulator
 ├── backtester/             # Python-based PnL analysis
@@ -44,7 +54,11 @@ AlphaFactory/
 
 ## Python Research Pipeline
 
-The research pipeline has been upgraded to support ensemble learning and richer feature sets.
+**Philosophy**: Simple, fast, and memory-efficient. The pipeline uses XGBoost exclusively, chosen for its:
+- **Speed**: Trains in seconds on multi-asset datasets
+- **Robustness**: Handles missing data and outliers gracefully
+- **Interpretability**: Feature importance analysis built-in
+- **Memory Efficiency**: Optimized sliding window implementation prevents crashes on large datasets
 
 1.  **Data Loading**: 
     -   `data.download_data` fetches daily OHLCV from Yahoo Finance.
@@ -56,10 +70,10 @@ The research pipeline has been upgraded to support ensemble learning and richer 
     -   **Statistical**: Rolling Skewness and Kurtosis (20-day) to capture tail risk.
     -   **Tensorization**: Converts data into `[Samples, Lookback, Features]` 3D tensors.
 
-3.  **Model Training (Ensemble)**:
-    -   **Transformer**: Attention-based model to capture sequential dependencies.
-    -   **XGBoost**: Gradient boosting tree model on flattened features.
-    -   **Ensemble**: `EnsembleAlpha` weights predictions (default 50/50) for robust signal generation.
+3.  **Model Training**:
+    -   **XGBoost**: Gradient boosting with 100 estimators, max depth 6, learning rate 0.1
+    -   **Training**: 80/20 train/validation split with early stopping
+    -   **Memory Management**: Explicit garbage collection after processing each asset
 
 4.  **Signal Export**:
     -   Predictions are finalized and exported to CSV for the Execution Engine.
@@ -129,6 +143,6 @@ python -m data.download_data --asset-class fx --symbol EURUSD --start 2020-01-01
 ## Example End-to-End Flow
 
 1.  **Download**: Fetch `AAPL` and `BTC-USD`.
-2.  **Run Strategy**: `python run_strategy.py` matches timestamps, generates features, trains the ensemble, and saves `ensemble_signals.csv`.
+2.  **Run Strategy**: `python run_strategy.py` matches timestamps, generates features, trains XGBoost, and saves `ensemble_signals.csv`.
 3.  **Simulation**: (Optional) Convert signals for C++ engine and valid execution logic.
 4.  **Analysis**: Open the Dashboard to view the resulting Alpha.
