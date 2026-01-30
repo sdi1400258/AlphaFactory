@@ -1,0 +1,52 @@
+# RL Configuration for AlphaFactory v3.0
+
+# Agent type
+agent: ppo  # Options: ppo, a2c, sac, ddpg
+
+# Training parameters
+training:
+  total_timesteps: 100000
+  learning_rate: 0.0003
+  batch_size: 64
+  n_steps: 2048
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE parameter
+  
+# Environment settings
+environment:
+  initial_balance: 10000
+  transaction_cost: 0.001  # 0.1% per trade
+  slippage: 0.0005  # 0.05% slippage
+  
+# Reward function
+reward:
+  type: sharpe  # Options: sharpe, sortino, pnl, calmar
+  scaling: 1.0
+  risk_free_rate: 0.02  # 2% annual
+  
+# Position sizing
+position_sizing:
+  method: kelly  # Options: kelly, fixed, volatility
+  max_position: 0.2  # Max 20% of capital per asset
+  leverage: 1.0  # No leverage for now
+  
+# Risk management
+risk:
+  max_drawdown_stop: 0.20  # Stop trading if DD > 20%
+  daily_loss_limit: 0.05  # Max 5% daily loss
+  position_timeout: 24  # Max hours to hold position (0 = no limit)
+
+# Multi-strategy ensemble
+ensemble:
+  enabled: false  # Enable after individual strategies work
+  strategies:
+    - trend_following
+    - mean_reversion
+    - breakout
+  weights: [0.4, 0.3, 0.3]  # Strategy allocation
+  
+# Walk-forward validation
+validation:
+  train_period_months: 12
+  test_period_months: 3
+  step_months: 3

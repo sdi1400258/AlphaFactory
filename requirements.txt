@@ -1,12 +1,38 @@
-numpy>=1.24
-pandas>=2.0
-scikit-learn>=1.3
-torch>=2.2
-torchvision>=0.17
-torchaudio>=2.2
-xgboost>=2.0
-matplotlib>=3.8
-seaborn>=0.13
-streamlit>=1.37
-yfinance>=0.2
+# AlphaFactory v3.0 Dependencies
 
+# Core
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Crypto Data
+ccxt>=4.0.0
+python-binance>=1.0.0
+
+# Machine Learning & RL
+finrl>=0.3.6
+stable-baselines3>=2.0.0
+gymnasium>=0.29.0
+torch>=2.0.0
+
+# Technical Analysis
+ta-lib>=0.4.0
+pandas-ta>=0.3.14b
+
+# Backtesting & Performance
+pyfolio-reloaded>=0.9.5
+empyrical>=0.5.5
+
+# Utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+streamlit>=1.25.0
+plotly>=5.15.0
+
+# Optional: On-chain data
+# glassnode>=1.0.0
+
+# Optional: Quantitative Finance
+# quantlib>=1.30

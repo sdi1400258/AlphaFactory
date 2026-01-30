@@ -1,8 +1,7 @@
-#pragma once
-
 #include <deque>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 namespace alpha {
 
@@ -10,6 +9,7 @@ enum class Side { BUY, SELL };
 
 struct Order {
     std::string id;
+    std::string symbol;
     Side side;
     double price;
     double qty;
@@ -17,6 +17,7 @@ struct Order {
 };
 
 struct Trade {
+    std::string symbol;
     std::string taker_id;
     std::string maker_id;
     Side side; // side of taker
@@ -45,6 +46,14 @@ class OrderBook {
     double best_bid() const;
     double best_ask() const;
     double mid() const;
+};
+
+class MatchingEngine {
+  public:
+    std::unordered_map<std::string, OrderBook> books;
+
+    void add_limit(const Order &o, std::vector<Trade> &trades);
+    void add_market(const Order &o, std::vector<Trade> &trades);
 };
 
 } // namespace alpha

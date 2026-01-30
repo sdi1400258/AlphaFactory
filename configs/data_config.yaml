@@ -1,0 +1,39 @@
+# Data Configuration for AlphaFactory v3.0
+
+# Cryptocurrency symbols to trade (Binance uses USDT pairs)
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT
+  - AVAX/USDT
+  - MATIC/USDT
+
+# Timeframes for multi-timeframe analysis
+timeframes:
+  primary: 1h      # Main trading timeframe
+  secondary:
+    - 15m          # Short-term
+    - 4h           # Medium-term
+    - 1d           # Long-term
+
+# Data range
+start_date: "2020-01-01"
+end_date: "2026-01-31"
+
+# Exchange settings
+exchange:
+  name: binance
+  rate_limit: true
+  enable_rate_limit: true
+
+# Data sources
+sources:
+  ohlcv: ccxt      # CCXT for OHLCV data
+  onchain: null    # Optional: glassnode, cryptoquant
+  funding: ccxt    # Funding rates from CCXT
+
+# Data preprocessing
+preprocessing:
+  fill_method: ffill  # Forward fill missing data
+  outlier_threshold: 5.0  # Remove outliers > 5 std devs
+  normalize: true

@@ -1,216 +1,146 @@
 """
-Feature engineering for multi-asset OHLCV + microstructure-style features.
+Advanced Feature Engineering for Crypto RL Trading.
 
-Transforms a long dataframe of bars into model-ready 3D tensors:
-[samples, lookback, features].
+Uses pandas_ta for robust technical indicators and statistical features.
 """
-
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
-
-from .common import BarConfig, compute_forward_returns
-
-
-@dataclass
-class FeatureConfig:
-    bar: BarConfig
-    include_microstructure: bool = True
-    include_technical: bool = True
-    include_volume: bool = True
-    include_momentum: bool = True  # RSI, MACD
-    include_volatility: bool = True  # ATR, Bollinger
-    include_stats: bool = True  # Skew, Kurtosis
+import pandas_ta as ta
+from typing import List, Tuple, Optional
 
 
-def add_basic_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_advanced_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add advanced technical and statistical features using pandas_ta.
+    """
     df = df.copy()
-    df["ret_1"] = df["close"].pct_change()
-    df["log_ret_1"] = np.log(df["close"]).diff()
-    df["vol_20"] = df["ret_1"].rolling(20).std()
-    df["vol_60"] = df["ret_1"].rolling(60).std()
-    df["vol_chg"] = df["vol_20"] / (df["vol_60"] + 1e-8)
-    return df
-
-
-def add_volume_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df["vol_zscore_20"] = (
-        (df["volume"] - df["volume"].rolling(20).mean())
-        / (df["volume"].rolling(20).std() + 1e-8)
-    )
-    df["vol_roll_sum_20"] = df["volume"].rolling(20).sum()
-    return df
-
-
-def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    close = df["close"]
     
-    # RSI (14)
-    delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / (loss + 1e-8)
-    df["rsi_14"] = 100 - (100 / (1 + rs))
-    df["rsi_14"] = df["rsi_14"] / 100.0  # Normalize to 0-1
-
-    # MACD (12, 26, 9)
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
-    macd = ema12 - ema26
-    signal = macd.ewm(span=9, adjust=False).mean()
-    df["macd_hist"] = macd - signal
-    # Normalize MACD by close price to make it asset-agnostic
-    df["macd_hist_norm"] = df["macd_hist"] / (close + 1e-8)
-
-    # Bollinger Bands (20, 2)
-    sma20 = close.rolling(20).mean()
-    std20 = close.rolling(20).std()
-    upper = sma20 + 2 * std20
-    lower = sma20 - 2 * std20
-    # Distance from bands as feature
-    df["bb_width"] = (upper - lower) / (close + 1e-8)
-    df["bb_position"] = (close - lower) / (upper - lower + 1e-8)
-
-    # ATR (14)
-    high_low = df["high"] - df["low"]
-    high_close = (df["high"] - df["close"].shift()).abs()
-    low_close = (df["low"] - df["close"].shift()).abs()
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    df["atr_14"] = tr.rolling(14).mean()
-    df["atr_rel"] = df["atr_14"] / (close + 1e-8)
+    # 1. Momentum Indicators
+    df['rsi_14'] = ta.rsi(df['close'], length=14)
+    df['cci_20'] = ta.cci(df['high'], df['low'], df['close'], length=20)
+    
+    # MACD
+    macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
+    df['macd'] = macd['MACD_12_26_9']
+    df['macd_signal'] = macd['MACDs_12_26_9']
+    df['macd_hist'] = macd['MACDh_12_26_9']
+    
+    # 2. Volatility Indicators
+    bbands = ta.bbands(df['close'], length=20, std=2)
+    df['bb_upper'] = bbands.iloc[:, 2] # Use integer index to be safer
+    df['bb_lower'] = bbands.iloc[:, 0]
+    df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['close']
+    df['bb_percent'] = (df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'] + 1e-8)
+    
+    df['atr_14'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+    df['atr_norm'] = df['atr_14'] / df['close']
+    
+    # 3. Volume Indicators
+    df['obv'] = ta.obv(df['close'], df['volume'])
+    df['obv_norm'] = df['obv'].pct_change()
+    
+    df['mfi_14'] = ta.mfi(df['high'], df['low'], df['close'], df['volume'], length=14)
+    
+    # 4. Trend Indicators
+    df['ema_20'] = ta.ema(df['close'], length=20)
+    df['ema_50'] = ta.ema(df['close'], length=50)
+    df['ema_200'] = ta.ema(df['close'], length=200)
+    
+    # Distance from EMAs
+    df['dist_ema_20'] = (df['close'] - df['ema_20']) / df['ema_20']
+    df['dist_ema_50'] = (df['close'] - df['ema_50']) / df['ema_50']
+    df['dist_ema_200'] = (df['close'] - df['ema_200']) / df['ema_200']
+    
+    # 5. Statistical Features
+    df['returns'] = df['close'].pct_change()
+    df['roll_vol_20'] = df['returns'].rolling(20).std()
+    df['roll_skew_20'] = df['returns'].rolling(20).skew()
+    df['roll_kurt_20'] = df['returns'].rolling(20).kurt()
+    
+    # 6. Price Action
+    df['high_low_range'] = (df['high'] - df['low']) / df['close']
+    df['close_open_range'] = (df['close'] - df['open']) / df['close']
     
     return df
 
 
-def add_statistical_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    window = 20
-    # Rolling Skew & Kurtosis of returns
-    rets = df["ret_1"]
-    df["ret_skew_20"] = rets.rolling(window).skew()
-    df["ret_kurt_20"] = rets.rolling(window).kurt()
-    return df
-
-
-def add_microstructure_proxies(df: pd.DataFrame) -> pd.DataFrame:
+def build_rl_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Approximate microstructure with bar-based features:
-    - high_low_spread: (high - low) / close
-    - close_position: where close sits in the bar range
+    Prepare DataFrame for RL environment (single asset).
     """
-    df = df.copy()
-    rng = df["high"] - df["low"]
-    df["high_low_spread"] = rng / (df["close"] + 1e-8)
-    df["close_pos_in_bar"] = (df["close"] - df["low"]) / (rng + 1e-8)
-    return df
-
-
-def add_advanced_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Use extended columns (trades, taker_buy, quote_volume) for deeper insights.
-    """
-    df = df.copy()
-    # Avoid division by zero
-    safe_vol = df["volume"] + 1e-8
-    safe_trades = df["trades"] + 1e-8
+    df = add_advanced_features(df)
     
-    # 1. Average Trade Size
-    df["avg_trade_size"] = df["volume"] / safe_trades
-    
-    # 2. Taker Buy Ratio (Aggressor Ratio)
-    df["taker_buy_ratio"] = df["taker_buy_base"] / safe_vol
-    
-    # 3. Flow Imbalance (in quote currency)
-    # Net buying pressure = Taker Buy Quote Vol - Taker Sell Quote Vol
-    # Taker Sell Quote Vol = Total Quote Vol - Taker Buy Quote Vol
-    taker_sell_quote = df["quote_volume"] - df["taker_buy_quote"]
-    df["flow_imbalance"] = (df["taker_buy_quote"] - taker_sell_quote) / (df["quote_volume"] + 1e-8)
-    
-    return df
-
-
-def build_features(
-    df: pd.DataFrame, feature_cfg: FeatureConfig
-) -> Tuple[np.ndarray, np.ndarray, List[str], np.ndarray]:
-    """
-    Turn a single-asset dataframe into rolling-window tensors.
-    Returns:
-        X: [n_samples, lookback, n_features]
-        y: [n_samples] forward returns
-        feature_cols: list of feature names
-        times: [n_samples] timestamps corresponding to the end of each input window
-    """
-    df = df.copy()
-    df = add_basic_features(df)
-    if feature_cfg.include_volume:
-        df = add_volume_features(df)
-    if feature_cfg.include_microstructure:
-        df = add_microstructure_proxies(df)
-        df = add_advanced_microstructure_features(df)
-    if feature_cfg.include_momentum or feature_cfg.include_volatility:
-        df = add_technical_indicators(df)
-    if feature_cfg.include_stats:
-        df = add_statistical_features(df)
-
-    df["fwd_ret"] = compute_forward_returns(
-        df["close"], feature_cfg.bar.prediction_horizon
-    )
-
-    # Drop initial NaNs from rolling calculations
+    # Drop rows with NaNs (from indicators)
     df = df.dropna().reset_index(drop=True)
-
-    feature_cols = [
-        c
-        for c in df.columns
-        if c
-        not in {
-            "timestamp",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "fwd_ret",
-            "quote_volume",
-            "trades", 
-            "taker_buy_base",
-            "taker_buy_quote"
-        }
-    ]
-
-    lookback = feature_cfg.bar.lookback_window
     
-    values = df[feature_cols].values.astype("float32")
-    targets = df["fwd_ret"].values.astype("float32")
-    times = df["timestamp"].values
+    return df
 
-    # Memory-efficient sliding window using stride tricks
-    if len(df) < lookback:
-        X = np.empty((0, lookback, len(feature_cols)), dtype="float32")
-        y = np.empty((0,), dtype="float32")
-        out_times = np.empty((0,), dtype="datetime64[ns]")
-    else:
-        # Create sliding windows efficiently (creates a view, not a copy)
-        X = np.lib.stride_tricks.sliding_window_view(
-            values, window_shape=lookback, axis=0
-        )
-        # Transpose to get shape [n_samples, lookback, n_features]
-        X = np.transpose(X, (0, 2, 1))
+
+def add_cross_asset_features(df: pd.DataFrame, symbols: List[str]) -> pd.DataFrame:
+    """
+    Add features that depend on multiple assets:
+    - Correlation to BTC
+    - Beta to BTC
+    - Relative Return Rank
+    
+    Assumes df has MultiIndex columns (symbol, feature) and 'timestamp'.
+    """
+    df = df.copy()
+    
+    # Use BTC/USDT as market proxy (consistent with data_config.yaml)
+    market_proxy = 'BTC/USDT'
+    if market_proxy not in symbols:
+        market_proxy = symbols[0] # Fallback
         
-        # Align targets and times with the windows
-        # sliding_window_view creates (len(values) - lookback + 1) windows
-        # We need y[lookback:] which has (len(df) - lookback) elements
-        # So we need to trim X by 1 element
-        X = X[:-1]  # Remove last window since we don't have a forward return for it
-        y = targets[lookback:]
-        out_times = times[lookback-1:-1]  # Timestamp of the last bar in each window
+    market_rets = df[(market_proxy, 'returns')]
+    
+    for symbol in symbols:
+        if symbol == market_proxy:
+            df[(symbol, 'corr_btc')] = 1.0
+            df[(symbol, 'beta_btc')] = 1.0
+            continue
+            
+        asset_rets = df[(symbol, 'returns')]
+        
+        # 1. Rolling Correlation (60h ~ 2.5 days)
+        df[(symbol, 'corr_btc')] = asset_rets.rolling(60).corr(market_rets)
+        
+        # 2. Rolling Beta
+        # Beta = Cov(asset, market) / Var(market)
+        covariance = asset_rets.rolling(60).cov(market_rets)
+        variance = market_rets.rolling(60).var()
+        df[(symbol, 'beta_btc')] = covariance / (variance + 1e-8)
+        
+    # 3. Relative Strength (Cross-sectional Rank)
+    # Get all 'returns' columns
+    returns_df = pd.DataFrame({
+        s: df[(s, 'returns')] for s in symbols
+    })
+    
+    # Rank assets by returns at each timestamp (normalized to 0-1)
+    ranks = returns_df.rank(axis=1, pct=True)
+    
+    for symbol in symbols:
+        df[(symbol, 'return_rank')] = ranks[symbol]
+        
+    # Drop rows with NaNs from rolling calculations
+    df = df.dropna().reset_index(drop=True)
+    
+    return df
 
-    return X, y, feature_cols, out_times
 
-
+def get_feature_list(df: pd.DataFrame) -> List[str]:
+    """
+    Return list of feature columns (excluding OHLCV meta).
+    """
+    # For MultiIndex, we check the second level
+    exclude = {'timestamp', 'open', 'high', 'low', 'close', 'volume', 'ema_20', 'ema_50', 'ema_200', 'bb_upper', 'bb_lower', 'obv', 'returns'}
+    
+    # If it's a MultiIndex (after cross-asset features)
+    if isinstance(df.columns, pd.MultiIndex):
+        # We want the unique features (level 1)
+        features = set(df.columns.get_level_values(1))
+        return sorted(list(features - exclude - {''}))
+    else:
+        return [col for col in df.columns if col not in exclude]

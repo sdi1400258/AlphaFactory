@@ -34,7 +34,7 @@ void OrderBook::add_limit(const Order &o_in, std::vector<Trade> &trades) {
             for (auto qit = lvl.queue.begin(); qit != lvl.queue.end() && o.qty > 0;) {
                 double traded = std::min(o.qty, qit->qty);
                 trades.push_back(
-                    {o.id, qit->id, Side::BUY, lvl.price, traded, o.timestamp_ns});
+                    {o.symbol, o.id, qit->id, Side::BUY, lvl.price, traded, o.timestamp_ns});
                 o.qty -= traded;
                 qit->qty -= traded;
                 if (qit->qty <= 0) {
@@ -62,7 +62,7 @@ void OrderBook::add_limit(const Order &o_in, std::vector<Trade> &trades) {
             for (auto qit = lvl.queue.begin(); qit != lvl.queue.end() && o.qty > 0;) {
                 double traded = std::min(o.qty, qit->qty);
                 trades.push_back(
-                    {o.id, qit->id, Side::SELL, lvl.price, traded, o.timestamp_ns});
+                    {o.symbol, o.id, qit->id, Side::SELL, lvl.price, traded, o.timestamp_ns});
                 o.qty -= traded;
                 qit->qty -= traded;
                 if (qit->qty <= 0) {
@@ -94,7 +94,7 @@ void OrderBook::add_market(const Order &o_in, std::vector<Trade> &trades) {
             for (auto qit = lvl.queue.begin(); qit != lvl.queue.end() && o.qty > 0;) {
                 double traded = std::min(o.qty, qit->qty);
                 trades.push_back(
-                    {o.id, qit->id, Side::BUY, lvl.price, traded, o.timestamp_ns});
+                    {o.symbol, o.id, qit->id, Side::BUY, lvl.price, traded, o.timestamp_ns});
                 o.qty -= traded;
             qit->qty -= traded;
                 if (qit->qty <= 0) {
@@ -115,7 +115,7 @@ void OrderBook::add_market(const Order &o_in, std::vector<Trade> &trades) {
             for (auto qit = lvl.queue.begin(); qit != lvl.queue.end() && o.qty > 0;) {
                 double traded = std::min(o.qty, qit->qty);
                 trades.push_back(
-                    {o.id, qit->id, Side::SELL, lvl.price, traded, o.timestamp_ns});
+                    {o.symbol, o.id, qit->id, Side::SELL, lvl.price, traded, o.timestamp_ns});
                 o.qty -= traded;
                 qit->qty -= traded;
                 if (qit->qty <= 0) {
@@ -164,6 +164,14 @@ double OrderBook::mid() const {
     if (bids.empty() || asks.empty())
         return 0.0;
     return 0.5 * (best_bid() + best_ask());
+}
+
+void MatchingEngine::add_limit(const Order &o, std::vector<Trade> &trades) {
+    books[o.symbol].add_limit(o, trades);
+}
+
+void MatchingEngine::add_market(const Order &o, std::vector<Trade> &trades) {
+    books[o.symbol].add_market(o, trades);
 }
 
 } // namespace alpha

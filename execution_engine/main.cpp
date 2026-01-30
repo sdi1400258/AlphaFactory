@@ -12,18 +12,26 @@ int main(int argc, char **argv) {
     }
 
     std::string path = argv[1];
-    SimulationConfig cfg; // use defaults
+    SimulationConfig cfg; 
 
-    std::cout << "Running simulation from CSV: " << path << "\n";
     SimResult res = run_simulation_csv(path, cfg);
 
-    double notional = 0.0;
-    for (const auto &t : res.trades) {
-        notional += t.price * t.qty;
+    // Output results as a simple JSON list for Python
+    std::cout << "[\n";
+    for (size_t i = 0; i < res.trades.size(); ++i) {
+        const auto &t = res.trades[i];
+        std::cout << "  {\"symbol\": \"" << t.symbol
+                  << "\", \"taker_id\": \"" << t.taker_id 
+                  << "\", \"maker_id\": \"" << t.maker_id
+                  << "\", \"side\": \"" << ((t.side == Side::BUY) ? "BUY" : "SELL")
+                  << "\", \"price\": " << t.price
+                  << ", \"qty\": " << t.qty
+                  << ", \"timestamp\": " << t.timestamp_ns << "}";
+        if (i < res.trades.size() - 1) std::cout << ",";
+        std::cout << "\n";
     }
+    std::cout << "]\n";
 
-    std::cout << "Trades executed: " << res.trades.size() << "\n";
-    std::cout << "Total traded notional: " << notional << "\n";
     return 0;
 }
 
