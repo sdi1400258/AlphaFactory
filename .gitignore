@@ -26,7 +26,7 @@ Makefile
 data/
 logs/
 results/
-models/checkpoint_*
+models/checkpoints/
 orders.csv
 execution_engine/alpha_simulator
 
