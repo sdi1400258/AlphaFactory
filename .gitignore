@@ -22,4 +22,12 @@ Makefile
 .idea/
 .vscode/
 
+# Project Specific
+data/
+logs/
+results/
+models/checkpoint_*
+orders.csv
+execution_engine/alpha_simulator
+
 
