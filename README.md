@@ -1,19 +1,19 @@
-# AlphaFactory v3.0: Multi-Crypto DRL Trading System 🚀
+# AlphaFactory v3.0: Multi-Crypto DRL Trading System
 
 AlphaFactory v3.0 is an industrial-grade Deep Reinforcement Learning (DRL) framework for multi-asset cryptocurrency portfolio management. It utilizes Proximal Policy Optimization (PPO) and the Kelly Criterion to manage a portfolio of top-tier crypto assets simultaneously.
 
-![Pipeline Flowchart](pipeline_flowchart.png)
+![Pipeline Flowchart](/assets/pipeline_flowchart.png)
 
-## 🌟 Key Features
+## Key Features
 - **Multi-Asset RL**: A single Master Agent manages a portfolio of symbols (BTC, ETH, SOL, AVAX, MATIC).
-- **Kelly Criterion**: Dynamic position sizing based on historical win rates and volatility-adjusted scaling ($f^* = \mu / \sigma^2$).
+- **Kelly Criterion**: Dynamic position sizing based on historical win rates and volatility-adjusted scaling.
 - **Advanced Features**: Cross-asset correlation, beta to BTC market, and relative strength metrics.
 - **C++ Execution Engine**: High-fidelity validation with an isolated multi-symbol order book matching engine.
 - **Performance Dashboard**: Real-time visualization of equity curves, asset weights, and risk metrics.
 
 ---
 
-## 🛠️ Quick Start
+## Quick Start
 
 ### 1. Local Setup
 ```bash
@@ -53,7 +53,7 @@ streamlit run dashboard_app.py
 
 ---
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 Containerize everything for consistent deployment:
 
@@ -67,7 +67,7 @@ docker run -p 8501:8501 alphafactory-v3
 
 ---
 
-## 📊 Performance Targets
+## Performance Targets
 | Metric | Goal |
 |--------|------|
 | **Annual Return** | 30% - 50%+ |
@@ -77,7 +77,7 @@ docker run -p 8501:8501 alphafactory-v3
 
 ---
 
-## 🎯 Methodology
+## Methodology
 AlphaFactory v3.0 transitions from single-asset models to a holistic portfolio approach. By training a single RL agent to understand inter-asset relationships (correlations and relative strength), it achieves superior risk-adjusted returns compared to individual asset strategies.
 
 ---
